@@ -154,7 +154,8 @@ El despliegue fue realizado sobre **Docker Desktop en Windows 10**, el cual act�
 
 | Nombre | Rol |
 |---|---|
-|                     | Infraestructura y clúster |
+|                     
+| Infraestructura y clúster |
 | [Jhamile Macavilca] | Configuración de servicios |
 |                     | Documentación e informe |
 

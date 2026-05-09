@@ -2,17 +2,14 @@ services:
   backend:
     build: ./backend
     ports:
-      - "3000:3000"
+      - "3001:3001"
+    # El backend parece funcionar bien, podemos dejar sus volumes si quieres
     volumes:
       - ./backend:/app
-    environment:
-      - NODE_ENV=development
+      - /app/node_modules
 
   frontend:
     build: ./frontend
     ports:
       - "5173:5173"
-    volumes:
-      - ./frontend:/app
-    depends_on:
-      - backend
+    # Quitamos los volumes del frontend para que no haya conflictos

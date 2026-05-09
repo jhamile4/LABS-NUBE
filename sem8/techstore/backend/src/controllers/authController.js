@@ -83,7 +83,45 @@ async function login(req, res) {
       [usuario.id]
     );
 
-    // Generar código MFA de 6 dígitos
+    // Verificar si MFA está habilitado
+    console.log('Usuario MFA habilitado:', usuario.mfa_habilitado, 'tipo:', typeof usuario.mfa_habilitado);
+    if (!usuario.mfa_habilitado) {
+      console.log('MFA desactivado, devolviendo token directamente');
+      // MFA desactivado: devolver token directamente
+      const [rolRows] = await pool.query(
+        `SELECT r.nombre FROM roles r 
+         JOIN usuario_roles ur ON r.id = ur.rol_id 
+         WHERE ur.usuario_id = ? LIMIT 1`,
+        [usuario.id]
+      );
+      const rol = rolRows[0]?.nombre || 'Empleado';
+
+      const token = jwt.sign(
+        { 
+          id: usuario.id, 
+          email: usuario.email, 
+          nombre: usuario.nombre_completo, 
+          rol, 
+          tienda_id: usuario.tienda_id 
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN }
+      );
+
+      return res.json({ 
+        token, 
+        usuario: { 
+          id: usuario.id, 
+          email: usuario.email, 
+          nombre: usuario.nombre_completo, 
+          rol, 
+          tienda_id: usuario.tienda_id 
+        } 
+      });
+    }
+
+    console.log('MFA activado, generando código');
+    // MFA habilitado: generar código
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     const expira = new Date(Date.now() + 5 * 60 * 1000); // 5 minutos
 
@@ -165,4 +203,56 @@ async function verificarMFA(req, res) {
   }
 }
 
-module.exports = { registrar, login, verificarMFA };
+async function toggleMFA(req, res) {
+  try {
+    console.log('Toggle MFA llamado por usuario:', req.usuario.id);
+    const usuarioId = req.usuario.id; // Del middleware de autenticación
+
+    const [rows] = await pool.query('SELECT mfa_habilitado FROM usuarios WHERE id = ?', [usuarioId]);
+    const usuario = rows[0];
+
+    if (!usuario) {
+      console.log('Usuario no encontrado');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const nuevoEstado = !usuario.mfa_habilitado;
+    console.log('Cambiando MFA de', usuario.mfa_habilitado, 'a', nuevoEstado);
+
+    await pool.query(
+      'UPDATE usuarios SET mfa_habilitado = ? WHERE id = ?',
+      [nuevoEstado, usuarioId]
+    );
+
+    res.json({ 
+      mensaje: `MFA ${nuevoEstado ? 'activado' : 'desactivado'} correctamente`,
+      mfa_habilitado: nuevoEstado
+    });
+  } catch (err) {
+    console.error('Error en toggleMFA:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+async function getEstadoMFA(req, res) {
+  try {
+    console.log('Get estado MFA llamado por usuario:', req.usuario.id);
+    const usuarioId = req.usuario.id;
+
+    const [rows] = await pool.query('SELECT mfa_habilitado FROM usuarios WHERE id = ?', [usuarioId]);
+    const usuario = rows[0];
+
+    if (!usuario) {
+      console.log('Usuario no encontrado en getEstadoMFA');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    console.log('Estado MFA:', usuario.mfa_habilitado);
+    res.json({ mfa_habilitado: usuario.mfa_habilitado });
+  } catch (err) {
+    console.error('Error en getEstadoMFA:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { registrar, login, verificarMFA, toggleMFA, getEstadoMFA };

@@ -1,5 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import API from '../api/client';
 
 const coloresPorRol = {
   Admin: 'from-red-500 to-orange-500',
@@ -11,10 +13,38 @@ const coloresPorRol = {
 export default function Dashboard() {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
-
+  const [mfaHabilitado, setMfaHabilitado] = useState(true); // Asumir habilitado por defecto
+  const [cargandoMFA, setCargandoMFA] = useState(false);
+  useEffect(() => {
+    // Obtener estado actual de MFA
+    async function obtenerEstadoMFA() {
+      try {
+        const res = await API.get('/auth/estado-mfa'); // Necesitamos crear este endpoint
+        setMfaHabilitado(res.data.mfa_habilitado);
+      } catch (err) {
+        console.error('Error obteniendo estado MFA:', err);
+      }
+    }
+    if (usuario?.rol === 'Admin') {
+      obtenerEstadoMFA();
+    }
+  }, [usuario]);
   function handleLogout() {
     logout();
     navigate('/');
+  }
+
+  async function toggleMFA() {
+    setCargandoMFA(true);
+    try {
+      const res = await API.post('/auth/toggle-mfa');
+      setMfaHabilitado(res.data.mfa_habilitado);
+      alert(res.data.mensaje);
+    } catch (err) {
+      alert('Error al cambiar MFA: ' + (err.response?.data?.error || 'Error desconocido'));
+    } finally {
+      setCargandoMFA(false);
+    }
   }
 
   const menus = [
@@ -44,6 +74,31 @@ export default function Dashboard() {
       <div className="max-w-5xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">Bienvenido, {usuario?.nombre?.split(' ')[0]} 👋</h1>
         <p className="text-slate-400 mb-10">Panel de control del sistema de inventario</p>
+
+        {usuario?.rol === 'Admin' && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">Configuración de Seguridad</h2>
+            <div className="flex items-center gap-4">
+              <span className="text-slate-300">MFA (Autenticación de 2 factores):</span>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${mfaHabilitado ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                {mfaHabilitado ? 'Activado' : 'Desactivado'}
+              </span>
+              <button
+                onClick={toggleMFA}
+                disabled={cargandoMFA}
+                className="bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-lg text-sm transition-all disabled:opacity-50"
+              >
+                {cargandoMFA ? 'Cambiando...' : (mfaHabilitado ? 'Desactivar MFA' : 'Activar MFA')}
+              </button>
+            </div>
+            <p className="text-slate-400 text-sm mt-2">
+              {mfaHabilitado 
+                ? 'Cada login requiere un código enviado a tu email.' 
+                : 'Puedes iniciar sesión solo con email y contraseña.'
+              }
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {menus.filter(m => m.roles.includes(usuario?.rol)).map(menu => (

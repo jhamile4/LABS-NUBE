@@ -19,8 +19,18 @@ export default function Login() {
     setCargando(true);
     try {
       const res = await API.post('/auth/login', form);
-      setUsuarioId(res.data.usuarioId);
-      setPaso(2);
+      
+      if (res.data.token) {
+        // MFA desactivado: login directo
+        login(res.data.usuario, res.data.token);
+        navigate('/dashboard');
+      } else if (res.data.requiereMFA) {
+        // MFA activado: pedir código
+        setUsuarioId(res.data.usuarioId);
+        setPaso(2);
+      } else {
+        setError('Respuesta inesperada del servidor');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al iniciar sesión');
     } finally {
